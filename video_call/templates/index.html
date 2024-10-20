@@ -1,0 +1,369 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Cache-Control" content="no-cache" />
+
+    <title>Звонок по WebRTC</title>
+
+    <link rel="icon" href="{% static 'icons/favicon.png' %}" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+
+    <script src="{% static 'call_line.js' %}"></script>
+
+    <script type="text/javascript">
+        const call_line = new CallLine();
+
+        let video_preview = null;
+        let video_subscriber = null;
+
+        function startCall() {
+            const call_code = document.querySelector('#call_code').value.toString();
+            call_line.dial(call_code);
+        }
+
+        function activatePreview() {
+            navigator.mediaDevices.getUserMedia({video: true})
+                .then(stream => {
+                    video_preview.srcObject = stream;
+                });
+        }
+
+        function setCurrentSubscriberOverlay(index) {
+            // сначала всё скроем, потом нужное постепенно восстановим
+
+            const headers = document.querySelector('.video_overlay').querySelectorAll('.header');
+            headers.forEach(header => header.hidden = true);
+
+            const call_code_form = document.querySelector('.call_code_form');
+            call_code_form.hidden = true;
+
+            headers.item(index).hidden = false;
+
+            if (index >= CallLine.Status.Call)  // call or rejected
+                return;
+
+            call_code_form.hidden = false;
+
+            const call_code       = document.querySelector('#call_code');
+            const btn_start_call  = document.querySelector('#btn_start_call');
+            const btn_cancel_call = document.querySelector('#btn_cancel_call');
+            call_code.disabled = true;
+            btn_start_call.hidden  = true
+            btn_cancel_call.hidden = true;
+
+            if (call_line.currentStatus() === CallLine.Status.Idle) {
+                call_code.disabled = false;
+                call_code.value = '';
+                btn_start_call.hidden = false;
+            } else {
+                btn_cancel_call.hidden = false;
+            }
+        }
+
+        function validateVideoOverlay() {
+            if (call_line.currentStatus() !== CallLine.Status.Call)
+                return;
+
+            const video_muted = call_line.isSubscriberCameraMuted();
+            document.querySelector('#subscriber').hidden = video_muted
+            document.querySelector('.video_overlay').hidden = !video_muted;
+
+            const subscriber_mute = document.querySelector('.subscriber_mute');
+            subscriber_mute.hidden = !call_line.isSubscriberMicrophoneMuted();
+        }
+
+        function validateBtnBar() {
+            const btn_camera_mute = document.querySelector('#btn_camera_mute');
+            const btn_microphone_mute = document.querySelector('#btn_microphone_mute');
+            const btn_speakers_mute = document.querySelector('#btn_speakers_mute');
+
+            btn_camera_mute.setAttribute('checked', call_line.isCameraMuted().toString());
+            btn_microphone_mute.setAttribute('checked', call_line.isMicrophoneMuted().toString());
+            btn_speakers_mute.setAttribute('checked', call_line.isAudioOutputMuted().toString());
+        }
+
+        function validatePreview() {
+            const muted = call_line.isCameraMuted();
+            muted ? video_preview.pause() : video_preview.play();
+            video_preview.hidden = muted;
+        }
+
+        call_line.addOnStatusChanged(() => {
+            setCurrentSubscriberOverlay(call_line.currentStatus());
+        });
+
+        call_line.addOnConnected(() => {
+            document.querySelector('.btn_bar').hidden = false;
+            navigator.permissions.query({ name: 'camera' })
+                .then(status => {
+                    document.querySelector('#btn_camera_mute').disabled = status.state !== 'granted';
+                });
+
+            call_line.setAudioOutputMuted(false);
+            validateVideoOverlay();
+            validateBtnBar();
+        });
+
+        call_line.addOnRejected(() => {
+            document.querySelector('.btn_bar').hidden = true;
+            document.querySelector('.subscriber_mute').hidden = true;
+            document.querySelector('.video_overlay').hidden = false;
+
+            setCurrentSubscriberOverlay(CallLine.Status.Call + 1);
+            setTimeout(() => setCurrentSubscriberOverlay(CallLine.Status.Idle), 2000);
+
+            validatePreview();
+        });
+
+        call_line.addOnMuteUpdated(() => {
+            validateVideoOverlay();
+            validateBtnBar();
+            validatePreview();
+        });
+
+        document.addEventListener('DOMContentLoaded', event => {
+            video_preview = document.querySelector('#preview');
+            video_subscriber = document.querySelector('#subscriber');
+            call_line.setupRemoteStreamOutput(video_subscriber);
+
+            const btn_camera_mute = document.querySelector('#btn_camera_mute');
+            const btn_microphone_mute = document.querySelector('#btn_microphone_mute');
+            const btn_speakers_mute = document.querySelector('#btn_speakers_mute');
+            btn_camera_mute.onclick = () => call_line.setCameraMuted(!call_line.isCameraMuted());
+            btn_microphone_mute.onclick = () => call_line.setMicrophoneMuted(!call_line.isMicrophoneMuted());
+            btn_speakers_mute.onclick = () => call_line.setAudioOutputMuted(!call_line.isAudioOutputMuted());
+
+            checkAndRequestPermissions().then(() => {
+                activatePreview();
+
+                document.querySelector('.microphone_access_denied').hidden = true;
+                document.querySelector('#call_code').disabled = false;
+                document.querySelector('#btn_start_call').disabled = false;
+            });
+        });
+    </script>
+
+    <style>
+        body {
+            background: linear-gradient(rgb(30, 30, 46), rgb(40, 40, 56) 35%, rgb(20, 20, 36));
+            background-attachment: fixed;
+            color: white;
+        }
+        .main_container {
+            min-width: 1000px;
+        }
+        .monitor {
+            max-width: max-content;
+            margin: 0 auto;
+            padding: 32px;
+            background: linear-gradient(rgb(167, 167, 181), rgb(176, 176, 190) 75%, rgb(163, 163, 177));
+            border: 2px solid rgb(180, 180, 194);
+        }
+
+        .video_wrapper {
+            display: grid;
+            position: relative;
+            background-color: rgb(12, 12, 29);
+            width: 400px;
+            height: 300px;
+            border-width: 5px;
+            border-style: solid;
+            border-top-color: rgb(113 113 147);
+            border-left-color: rgb(113 113 147);
+            border-right-color: rgb(218 218 231);
+            border-bottom-color: rgb(195 195 211);
+            box-sizing: content-box;
+        }
+        .video_wrapper > video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .video_overlay {
+            position: absolute;
+            display: grid;
+            width: 400px;
+            height: 300px;
+        }
+        .video_overlay .header {
+            display: grid;
+            align-self: start;
+        }
+        .video_overlay span {
+            width: 100px;
+            height: 100px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            margin: 0 auto;
+        }
+
+        .call_code_form {
+            align-self: end;
+        }
+        .call_code_form > input {
+            --bs-body-bg: rgba(127, 127, 127, 0.3);
+            --bs-body-color: white;
+            border-color: rgba(127, 127, 127, 0.4);
+        }
+        .call_code_form > input::placeholder {
+            color: gray;
+        }
+        .call_code_form > input:disabled {
+            background-color: rgba(127, 127, 127, 0.1);
+            --bs-body-color: gray;
+        }
+        .call_code_form > button {
+            --bs-btn-bg: rgba(127, 127, 127, 0.3);
+            border-color: rgba(127, 127, 127, 0.4);
+        }
+
+        .btn_bar {
+            width: 950px;
+            background-color: rgb(90 90 101);
+            border: 2px solid rgb(96 96 107);
+        }
+        .btn_bar .btn {
+            --bs-btn-active-bg: rgb(70 70 81);
+            --bs-btn-hover-bg: rgb(80 80 91);
+
+            width: 36px;
+            height: 36px;
+            box-sizing: content-box;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .btn_bar .btn[checked=true] {
+            --bs-btn-bg: rgb(70 70 81);
+        }
+        #btn_camera_mute[checked=false] {
+            background-image: url({% static 'icons/camera.png' %});
+        }
+        #btn_camera_mute[checked=true] {
+            background-image: url({% static 'icons/no_camera.png' %});
+        }
+        #btn_microphone_mute[checked=false] {
+            background-image: url({% static 'icons/microphone.png' %});
+        }
+        #btn_microphone_mute[checked=true] {
+            background-image: url({% static 'icons/no_microphone.png' %});
+        }
+        #btn_speakers_mute[checked=false] {
+            background-image: url({% static 'icons/speakers.png' %});
+        }
+        #btn_speakers_mute[checked=true] {
+            background-image: url({% static 'icons/no_speakers.png' %});
+        }
+        #btn_reject_call {
+            background-image: url({% static 'icons/reject.png' %});
+        }
+
+        .abonent_icon {
+            background-image: url({% static 'icons/abonent.png' %});
+        }
+        .title_icon {
+            background-image: url({% static 'icons/title.png' %});
+        }
+        .waiting_icon {
+            background-image: url({% static 'icons/waiting.png' %});
+        }
+        .connecting_icon {
+            background-image: url({% static 'icons/connecting.png' %});
+        }
+
+        .microphone_access_denied {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--bs-red);
+            color: var(--bs-red);
+            font-size: 10pt;
+            max-width: fit-content;
+            margin: 0 auto;
+            padding: 0 4px;
+        }
+
+        .subscriber_mute {
+            position: absolute;
+            left: 370px;
+            top: 270px;
+
+            width: 24px;
+            height: 24px;
+            {#margin: auto 4px 4px auto;#}
+
+            border: 1px solid rgb(127, 127, 127);
+            border-radius: 4px;
+            background-size: contain;
+            background-image: url({% static 'icons/no_microphone.png' %});
+            box-sizing: content-box;
+        }
+    </style>
+</head>
+<body>
+    <div class="main_container container mt-5 mb-5">
+        <h1 class="text-center">Звонок по WebRTC</h1>
+        <div class="monitor row mt-4 rounded-4">
+            <div class="col-6">
+                <div class="video_wrapper">
+                    <video autoplay id="preview"></video>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="video_wrapper">
+                    <video autoplay id="subscriber"></video>
+                    <div class="video_overlay text-center p-4">
+                        <div id="idle" class="header">
+                            <span class="title_icon"></span>
+                            <h4>Созвонитесь с кем-нибудь</h4>
+                            <p>Попросите своего друга ввести ваше кодовое слово</p>
+                        </div>
+                        <div id="wait_for_response" class="header" hidden>
+                            <span class="waiting_icon"></span>
+                            <h4>Ожидание собеседника</h4>
+                            <p>Первый, кто введёт это кодовое слово, соединится с вами</p>
+                        </div>
+                        <div id="connecting" class="header" hidden>
+                            <span class="connecting_icon"></span>
+                            <h4>Соединение...</h4>
+                        </div>
+                        <div id="call" class="header" hidden>
+                            <span class="abonent_icon"></span>
+                        </div>
+                        <div id="rejected" class="header" hidden>
+                            <span class="abonent_icon"></span>
+                            <h4>Прервано</h4>
+                            <p>Звонок закончен</p>
+                        </div>
+                        <div class="input-group call_code_form">
+                            <input id="call_code" class="form-control" type="text" placeholder="Например: testcall111" disabled />
+                            <button id="btn_start_call" class="btn btn-outline-secondary p-1" onclick="startCall();" disabled>
+                                <img src="{% static 'icons/accept.png' %}" />
+                            </button>
+                            <button id="btn_cancel_call" class="btn btn-outline-secondary p-1" onclick="call_line.reject();" hidden>
+                                <img src="{% static 'icons/cancel.png' %}" />
+                            </button>
+                        </div>
+                    </div>
+                    <span class="subscriber_mute" hidden></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="microphone_access_denied mt-2 rounded-2">
+            <img src="{% static 'icons/no_microphone.png' %}" width="18px" height="18px" />
+            <span>Отсутствует микрофон</span>
+        </div>
+
+         <div class="btn_bar container text-center mt-4 p-1 rounded-4" hidden>
+             <button id="btn_camera_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
+             <button id="btn_microphone_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
+             <button id="btn_speakers_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
+             <button id="btn_reject_call" class="btn btn-outline-secondary p-1" onclick="call_line.reject();"></button>
+         </div>
+
+    </div>
+</body>
+</html>
