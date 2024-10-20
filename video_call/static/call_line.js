@@ -1,5 +1,7 @@
 const CENTRAL_SERVER_URL = window.location.href + 'call_line_process/';
 
+const SYSTEM_CHANNEL_LABEL = 'system_channel'
+
 async function checkAndRequestPermissions() {
      return new Promise((resolve, reject) => {
          function stopTracks(stream) {
@@ -14,7 +16,8 @@ async function checkAndRequestPermissions() {
              .catch(err => {
                  console.error('Нет доступа к камере:', err)
 
-                 // может хотя бы только микрофон
+                 // может нет камеры
+                 // спросим хотя бы только микрофон
 
                  navigator.mediaDevices.getUserMedia({audio: true})
                      .then(stream => {
@@ -153,125 +156,110 @@ class CallLine {
         return true;
     }
 
-    async dial(call_code) {
+    dial(call_code) {
         if (this._cur_status !== CallLine.Status.Idle || call_code === '')
             return;
 
-        console.assert(this._rtc_peer == null);
+        this._cur_status = CallLine.Status.WaitForResponse;
+        this._on_status_changed.forEach(callback => callback());
 
-        const dial_response = await fetch(CENTRAL_SERVER_URL, {
+        fetch(CENTRAL_SERVER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 code: 'dial',
                 call_code: call_code
             })
-        });
+        })
+            .catch(err => {
+                console.error('Dial: error fetch\n', err);
+                this._resetCallLine();
+            })
+            .then(async dial_response => {
 
-        if (dial_response.status === 200) {
-            const json_data = await dial_response.json();
-            this._user_id = json_data.user_id;
+                if (dial_response.status === 200) {
+                    const json_data = await dial_response.json();
+                    this._user_id = json_data.user_id;
 
-            console.log('Dial: success\n', 'user_id:', this._user_id);
-        } else {
-            console.error('Dial: error');
-            return;
-        }
-
-        this._rtc_peer = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: ['stun:stun1.l.google.com:19302', 'stun:stun3.l.google.com:19302']
+                    console.log('Dial: success\n', 'user_id:', this._user_id);
+                } else {
+                    console.error('Dial: error');
+                    this._resetCallLine();
+                    return;
                 }
-            ]
-        });
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({video: true});
-            stream.getTracks().forEach(track => this._rtc_peer.addTrack(track));
-        }
-        catch (err) {
-            console.warn('Dial: error loading video device', err);
-        }
+                console.assert(this._rtc_peer == null);
 
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-            stream.getTracks().forEach(track => this._rtc_peer.addTrack(track));
-        }
-        catch (err) {
-            console.warn('Dial: error loading audio device', err);
-        }
-
-        this._rtc_peer.onicecandidate = async event => {
-            if (event.candidate) {
-                const response = await fetch(CENTRAL_SERVER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        code: 'ice',
-                        user_id: this._user_id,
-                        ice: event.candidate
-                    })
+                this._rtc_peer = new RTCPeerConnection({
+                    iceServers: [
+                        {
+                            urls: ['stun:stun1.l.google.com:19302', 'stun:stun3.l.google.com:19302']
+                        }
+                    ]
                 });
 
-                if (response.status === 200) {
-                    console.log('Sent ICE:\n', event.candidate);
-                } else {
-                    console.error('Sent ICE: error');
+                // loading camera
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({video: true});
+                    stream.getTracks().forEach(track => this._rtc_peer.addTrack(track));
                 }
-            }
-        };
+                catch (err) {
+                    console.warn('Dial: error loading video device', err);
+                }
 
-        this._rtc_peer.onconnectionstatechange = event => {
-            if (this._rtc_peer.connectionState === 'connected') {
-                this._onSuccessfulConnection();
-            }
-            else if (this._rtc_peer.connectionState === 'failed' ||
-                     this._rtc_peer.connectionState === 'disconnected' ||
-                     this._rtc_peer.connectionState === 'closed') {
-                this._resetCallLine();
-            }
-        };
+                // loading microphone
 
-        this._remote_stream = new MediaStream();
-        this._video_object.srcObject = this._remote_stream;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+                    stream.getTracks().forEach(track => this._rtc_peer.addTrack(track));
+                }
+                catch (err) {
+                    console.warn('Dial: error loading audio device', err);
+                }
 
-        this._rtc_peer.ontrack = event => {
-            if (event.track) {
-                this._remote_stream.addTrack(event.track);
-                console.log('Add remote track:\n', event.track);
-            }
-        }
+                this._rtc_peer.onicecandidate = async event => {
+                    if (event.candidate) {
+                        await this._onNewIceCandidate(event.candidate);
+                    }
+                }
 
-        this._rtc_peer.ondatachannel = event => {
-            console.log('Got Datachannel:\n', event);
+                this._rtc_peer.onconnectionstatechange = () => this._onRTCConnectionStateChange();
 
-            if (event.channel.label === 'system_code') {
-                this._system_code_datachannel = event.channel;
-                this._system_code_datachannel.onmessage = event => this._processSystemDataChannel(JSON.parse(event.data));
-            }
-        }
+                this._remote_stream = new MediaStream();
+                this._video_object.srcObject = this._remote_stream;
 
-        this._get_status_timer_id = setInterval(() => this._getStatusFromServer(), 3000);
+                this._rtc_peer.ontrack = event => {
+                    if (event.track) {
+                        this._remote_stream.addTrack(event.track);
+                        console.log('Add remote track:\n', event.track);
+                    }
+                }
 
-        this._cur_status = CallLine.Status.WaitForResponse;
-        this._on_status_changed.forEach(callback => callback());
+                this._rtc_peer.ondatachannel = event => {
+                    if (event.channel) {
+                        this._onNewDataChannel(event.channel);
+                    }
+                }
+
+                this._get_status_timer_id = setInterval(() => this._getStatusFromServer(), 3000);
+        });
     }
 
-    async reject() {
+    reject() {
         if (this._cur_status === CallLine.Status.Call) {
             this._system_code_datachannel.send(JSON.stringify({
                 code: 'reject'
             }));
         } else {
-            await fetch(CENTRAL_SERVER_URL, {
+            fetch(CENTRAL_SERVER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     code: 'disconnect',
                     user_id: this._user_id
                 })
-            });
+            }).then().catch();
         }
 
         this._resetCallLine();
@@ -355,7 +343,7 @@ class CallLine {
 
         console.assert(this._rtc_peer != null);
 
-        this._system_code_datachannel = this._rtc_peer.createDataChannel('system_code');
+        this._system_code_datachannel = this._rtc_peer.createDataChannel(SYSTEM_CHANNEL_LABEL);
         this._system_code_datachannel.onmessage = event => this._processSystemDataChannel(JSON.parse(event.data));
 
         const offer = await this._rtc_peer.createOffer({
@@ -430,6 +418,35 @@ class CallLine {
         json_ice_routes.forEach(route => this._rtc_peer.addIceCandidate(route));
     }
 
+    async _onNewIceCandidate(candidate) {
+        const response = await fetch(CENTRAL_SERVER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: 'ice',
+                user_id: this._user_id,
+                ice: candidate
+            })
+        });
+
+        if (response.status === 200) {
+            console.log('Sent ICE:\n', candidate);
+        } else {
+            console.error('Sent ICE: error');
+        }
+    }
+
+    _onRTCConnectionStateChange() {
+        const state = this._rtc_peer.connectionState;
+
+        if (state === 'connected') {
+            this._onSuccessfulConnection();
+        }
+        else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+            this._resetCallLine();
+        }
+    }
+
     _onSuccessfulConnection() {
         clearInterval(this._get_status_timer_id);
         this._get_status_timer_id = -1;
@@ -437,6 +454,17 @@ class CallLine {
         this._cur_status = CallLine.Status.Call;
         this._on_status_changed.forEach(callback => callback());
         this._on_connected.forEach(callback => callback());
+    }
+
+    _onNewDataChannel(channel) {
+        console.log('Got Datachannel:\n', channel);
+
+        if (channel.label === SYSTEM_CHANNEL_LABEL) {
+            console.assert(this._system_code_datachannel == null);
+
+            this._system_code_datachannel = channel;
+            this._system_code_datachannel.onmessage = event => this._processSystemDataChannel(JSON.parse(event.data));
+        }
     }
 
     _processSystemDataChannel(json_data) {

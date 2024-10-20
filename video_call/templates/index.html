@@ -26,9 +26,14 @@
         }
 
         function activatePreview() {
-            navigator.mediaDevices.getUserMedia({video: true})
-                .then(stream => {
-                    video_preview.srcObject = stream;
+            navigator.permissions.query({name: 'camera'})
+                .then(status => {
+                    if (status.state === 'granted') {
+                        navigator.mediaDevices.getUserMedia({video: true})
+                            .then(stream => {
+                                video_preview.srcObject = stream;
+                            });
+                    }
                 });
         }
 
@@ -92,16 +97,33 @@
             video_preview.hidden = muted;
         }
 
+        let timecode_timer_id = -1;
+        let start_call_time = null;
+
+        function validateTimecode() {
+            const cur_call_time = new Date();
+            cur_call_time.setTime(cur_call_time - start_call_time);
+
+            const timecode = document.querySelector('.timecode');
+            const hhmm = `${cur_call_time.getMinutes().toString().padStart(2, '0')}:${cur_call_time.getSeconds().toString().padStart(2, '0')}`;
+            timecode.innerText = hhmm;
+        }
+
         call_line.addOnStatusChanged(() => {
             setCurrentSubscriberOverlay(call_line.currentStatus());
         });
 
         call_line.addOnConnected(() => {
             document.querySelector('.btn_bar').hidden = false;
-            navigator.permissions.query({ name: 'camera' })
-                .then(status => {
-                    document.querySelector('#btn_camera_mute').disabled = status.state !== 'granted';
-                });
+
+            const disabled = call_line.isCameraMuted();
+            const btn_camera_mute = document.querySelector('#btn_camera_mute');
+            btn_camera_mute.disabled = disabled;
+            btn_camera_mute.setAttribute('checked', disabled.toString());
+            
+            start_call_time = new Date();
+            timecode_timer_id = setInterval(validateTimecode, 1000);
+            validateTimecode();
 
             call_line.setAudioOutputMuted(false);
             validateVideoOverlay();
@@ -112,6 +134,10 @@
             document.querySelector('.btn_bar').hidden = true;
             document.querySelector('.subscriber_mute').hidden = true;
             document.querySelector('.video_overlay').hidden = false;
+            
+            clearInterval(timecode_timer_id);
+            timecode_timer_id = -1;
+            start_call_time = null;
 
             setCurrentSubscriberOverlay(CallLine.Status.Call + 1);
             setTimeout(() => setCurrentSubscriberOverlay(CallLine.Status.Idle), 2000);
@@ -125,7 +151,7 @@
             validatePreview();
         });
 
-        document.addEventListener('DOMContentLoaded', event => {
+        document.addEventListener('DOMContentLoaded', () => {
             video_preview = document.querySelector('#preview');
             video_subscriber = document.querySelector('#subscriber');
             call_line.setupRemoteStreamOutput(video_subscriber);
@@ -262,6 +288,12 @@
             background-image: url({% static 'icons/reject.png' %});
         }
 
+        .timecode {
+            border: 2px solid rgb(96 96 107);
+            background-color: rgb(70 70 81);
+            vertical-align: middle;
+        }
+
         .abonent_icon {
             background-image: url({% static 'icons/abonent.png' %});
         }
@@ -361,6 +393,7 @@
              <button id="btn_camera_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
              <button id="btn_microphone_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
              <button id="btn_speakers_mute" class="btn btn-outline-secondary p-1" checked="false"></button>
+             <span class="timecode px-3 py-1 mx-2 rounded-3">00:00</span>
              <button id="btn_reject_call" class="btn btn-outline-secondary p-1" onclick="call_line.reject();"></button>
          </div>
 
