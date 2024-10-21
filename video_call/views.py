@@ -8,7 +8,7 @@ from video_call.models import AbonentPair, CallLineStatus
 
 
 class IndexView(TemplateView):
-    template_name = 'index.html'
+    template_name = 'video_call/index.html'
 
 
 @csrf_exempt
