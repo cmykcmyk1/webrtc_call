@@ -204,6 +204,8 @@ ice_routes_from_subscriber.forEach(route => rtc_peer.addIceCandidate(route));
  - Cервер ретранслирует собеседнику
  - Клиенты устанавливают WebRTC-соединение и сервер забывает об абонентах
 
+https://cmykcmyk.tw1.ru/call/
+
 ### Запуск проекта
 
 1. Установите Django.  
