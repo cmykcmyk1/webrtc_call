@@ -9,10 +9,10 @@
 
     <title>Звонок по WebRTC</title>
 
-    <link rel="icon" href="{% static 'video_call/icons/favicon.png' %}" />
+    <link rel="icon" href="{% static 'call/icons/favicon.png' %}" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
 
-    <script src="{% static 'video_call/call_line.js' %}"></script>
+    <script src="{% static 'call/call_line.js' %}"></script>
 
     <script type="text/javascript">
         const call_line = new CallLine();
@@ -267,25 +267,25 @@
             --bs-btn-bg: rgb(70 70 81);
         }
         #btn_camera_mute[checked=false] {
-            background-image: url({% static 'video_call/icons/camera.png' %});
+            background-image: url({% static 'call/icons/camera.png' %});
         }
         #btn_camera_mute[checked=true] {
-            background-image: url({% static 'video_call/icons/no_camera.png' %});
+            background-image: url({% static 'call/icons/no_camera.png' %});
         }
         #btn_microphone_mute[checked=false] {
-            background-image: url({% static 'video_call/icons/microphone.png' %});
+            background-image: url({% static 'call/icons/microphone.png' %});
         }
         #btn_microphone_mute[checked=true] {
-            background-image: url({% static 'video_call/icons/no_microphone.png' %});
+            background-image: url({% static 'call/icons/no_microphone.png' %});
         }
         #btn_speakers_mute[checked=false] {
-            background-image: url({% static 'video_call/icons/speakers.png' %});
+            background-image: url({% static 'call/icons/speakers.png' %});
         }
         #btn_speakers_mute[checked=true] {
-            background-image: url({% static 'video_call/icons/no_speakers.png' %});
+            background-image: url({% static 'call/icons/no_speakers.png' %});
         }
         #btn_reject_call {
-            background-image: url({% static 'video_call/icons/reject.png' %});
+            background-image: url({% static 'call/icons/reject.png' %});
         }
 
         .timecode {
@@ -295,16 +295,16 @@
         }
 
         .abonent_icon {
-            background-image: url({% static 'video_call/icons/abonent.png' %});
+            background-image: url({% static 'call/icons/abonent.png' %});
         }
         .title_icon {
-            background-image: url({% static 'video_call/icons/title.png' %});
+            background-image: url({% static 'call/icons/title.png' %});
         }
         .waiting_icon {
-            background-image: url({% static 'video_call/icons/waiting.png' %});
+            background-image: url({% static 'call/icons/waiting.png' %});
         }
         .connecting_icon {
-            background-image: url({% static 'video_call/icons/connecting.png' %});
+            background-image: url({% static 'call/icons/connecting.png' %});
         }
 
         .microphone_access_denied {
@@ -329,7 +329,7 @@
             border: 1px solid rgb(127, 127, 127);
             border-radius: 4px;
             background-size: contain;
-            background-image: url({% static 'video_call/icons/no_microphone.png' %});
+            background-image: url({% static 'call/icons/no_microphone.png' %});
             box-sizing: content-box;
         }
     </style>
@@ -372,10 +372,10 @@
                         <div class="input-group call_code_form">
                             <input id="call_code" class="form-control" type="text" placeholder="Например: testcall111" disabled />
                             <button id="btn_start_call" class="btn btn-outline-secondary p-1" onclick="startCall();" disabled>
-                                <img src="{% static 'video_call/icons/accept.png' %}" />
+                                <img src="{% static 'call/icons/accept.png' %}" />
                             </button>
                             <button id="btn_cancel_call" class="btn btn-outline-secondary p-1" onclick="call_line.reject();" hidden>
-                                <img src="{% static 'video_call/icons/cancel.png' %}" />
+                                <img src="{% static 'call/icons/cancel.png' %}" />
                             </button>
                         </div>
                     </div>
@@ -385,7 +385,7 @@
         </div>
 
         <div class="microphone_access_denied mt-2 rounded-2">
-            <img src="{% static 'video_call/icons/no_microphone.png' %}" width="18px" height="18px" />
+            <img src="{% static 'call/icons/no_microphone.png' %}" width="18px" height="18px" />
             <span>Отсутствует микрофон</span>
         </div>
 

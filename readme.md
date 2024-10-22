@@ -206,7 +206,7 @@ ice_routes_from_subscriber.forEach(route => rtc_peer.addIceCandidate(route));
 
 ### Запуск проекта
 
-1. Установите в своё окружение Django.  
+1. Установите Django.  
   
 2. В `webrtc_call/settings.py` отредактируйте `ALLOW_HOSTS`, дополните свой сетевой адрес:
 ```
@@ -216,10 +216,8 @@ ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.1']
 
 3. В терминале выполните:
 ```
-// Django is installed ...
-
 python manage.py makemigrations
-python manage.py makemigrations video_call
+python manage.py makemigrations call
 python manage.py migrate
 
 python manage.py test
@@ -227,7 +225,7 @@ python manage.py runserver 0.0.0.0:8000
 
 ```
 
-4. В браузере открываем `http://ip_addr:8000/video_call`, убеждаемся, что сайт открывается.  
+4. В браузере открываем `http://ip_addr:8000/call`, убеждаемся, что сайт открывается.  
 Скорее всего, браузер не даст работать с вашими медиаустройствами без https.  
 Требуется добавить адрес `http://ip_addr:8000/` в исключения вашего браузера.  
 https://stackoverflow.com/questions/40696280/unsafely-treat-insecure-origin-as-secure-flag-is-not-working-on-chrome  

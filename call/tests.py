@@ -4,8 +4,8 @@ from time import sleep
 from django.core.handlers.wsgi import WSGIRequest
 from django.test import TestCase
 
-from video_call.models import AbonentPair, CallLineStatus
-import video_call.views as views
+from call.models import AbonentPair, CallLineStatus
+import call.views as views
 
 
 class VideoCallTests(TestCase):

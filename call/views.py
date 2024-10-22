@@ -4,11 +4,11 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
-from video_call.models import AbonentPair, CallLineStatus
+from call.models import AbonentPair, CallLineStatus
 
 
 class IndexView(TemplateView):
-    template_name = 'video_call/index.html'
+    template_name = 'call/index.html'
 
 
 @csrf_exempt
